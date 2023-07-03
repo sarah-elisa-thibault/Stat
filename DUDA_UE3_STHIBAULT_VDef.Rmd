@@ -1,0 +1,670 @@
+---
+title: "UE3 - Introduction aux statistiques"
+output:
+  html_notebook: default
+  word_document: default
+---
+
+<br>
+<br>
+
+### 1. Appel des bibliothèques et import des jeux de données
+
+
+On commence par appeler les bibliothèques utiles
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+#Appel des bibliothèques utiles
+library(dplyr)
+library(ggplot2)
+library(forcats)
+library(extrafont)
+library(stringr)
+library(tidyr)
+library(purrr)
+library(plotly)
+library(crosstalk)
+library(data.table)
+library(knitr)
+library(rstatix)
+library(rcompanion)
+library(ggpubr)
+library(questionr)
+library(naniar)
+library(forestmodel)
+library(finalfit)
+```
+<br>
+<br>
+Puis, on importe les jeux de données et on regarde ce qu'ils contiennent
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+#Chargement des jeux de données
+path<-file.path("~", "DUDA_sets", "effec1.quest.compil.csv")
+quest1<-read.csv(path, stringsAsFactors = FALSE, fileEncoding="latin1")
+
+path<-file.path("~", "DUDA_sets", "effec2.quest.compil.csv")
+quest2<-read.csv(path, stringsAsFactors = FALSE, fileEncoding="latin1")
+
+path<-file.path("~", "DUDA_sets", "effec3.quest.compil.csv")
+quest3<-read.csv(path, stringsAsFactors = FALSE, fileEncoding="latin1")
+
+path<-file.path("~", "DUDA_sets", "usages.effec1.csv")
+usage1<-read.csv(path, stringsAsFactors = FALSE, fileEncoding="latin1")
+
+path<-file.path("~", "DUDA_sets", "usages.effec2.csv")
+usage2<-read.csv(path, stringsAsFactors = FALSE, fileEncoding="latin1")
+
+path<-file.path("~", "DUDA_sets", "usages.effec3.csv")
+usage3<-read.csv(path, stringsAsFactors = FALSE, fileEncoding="latin1")
+```
+```{r}
+#Découverte des données
+head(quest1,1)
+```
+
+```{r}
+head(quest2,1)
+```
+```{r}
+head(quest3,1)
+```
+```{r}
+head(usage1,1)
+```
+```{r}
+head(usage2,1)
+```
+```{r}
+head(usage3,1)
+```
+
+
+On constate que tous ces jeux de données disposent d'une variable commune, intitulée Student_Id, qui va nous permettre de les assembler.
+Cependant, on observe que certaines variables (birth.year, Curiosity.MOOC et Rencontres) sont de type différent selon les fichiers quest.
+Il sera donc nécessaire de les transformer (en leur donnant à toutes le même type) afin de pouvoir procéder à l'assemblage des fichiers.
+
+
+<br>
+<br>
+
+### 2. Préparation du jeu de données 
+
+#### 2.1. Regroupement par itération
+
+##### 2.1.1. Première itération du MOOC
+
+Ici, on assemble les fichiers de log et de questionnaires de la 1ère itération du MOOC
+
+```{r}
+dim(quest1)
+dim(usage1)
+
+IT1 <- quest1 %>%
+  mutate(birth.year = suppressWarnings(as.integer(birth.year)), 
+         Curiosity.MOOC = suppressWarnings(as.integer(Curiosity.MOOC)), 
+         Rencontres = suppressWarnings(as.integer(Rencontres))) %>% # on passe le type de la variable birth.year d'un double à un nombre entier
+  full_join(usage1, by = "Student_ID") %>% #on assemble les 2 jeux, grâce à leur variable commune "Student_ID", avec la fonction full_join afin de garder l'intégralité des données  
+  mutate(itération = "1") #on créé une nouvelle variable, appelée itéraion, afin de garder l'origine des données 
+
+dim(IT1)
+```
+<br>
+<br>
+
+
+##### 2.1.2. Deuxième itération du MOOC
+
+On assemble ensuite les fichiers relatifs à la deuxième itération
+
+```{r}
+dim(quest2)
+dim(usage2)
+
+
+IT2 <- quest2 %>%
+  mutate(birth.year = suppressWarnings(as.integer(birth.year)), 
+         Curiosity.MOOC = suppressWarnings(as.integer(Curiosity.MOOC)), 
+         Rencontres = suppressWarnings(as.integer(Rencontres))) %>% # on passe le type de la variable birth.year d'une chaine de caractères à un nombre entier
+  full_join(usage2, by = "Student_ID") %>% 
+  mutate(itération = "2") 
+
+dim(IT2)
+```
+
+<br>
+<br>
+
+##### 2.1.3. Troisième itération du MOOC
+
+Enfin, on assemble les fichiers relatifs à la troisième itération
+
+```{r}
+dim(quest3)
+dim(usage3)
+
+
+IT3 <- quest3 %>%
+  mutate(birth.year = suppressWarnings(as.integer(birth.year)), 
+         Curiosity.MOOC = suppressWarnings(as.integer(Curiosity.MOOC)), 
+         Rencontres = suppressWarnings(as.integer(Rencontres))) %>% # on passe le type de la variable birth.year d'un double à un nombre entier
+  full_join(usage3, by = "Student_ID") %>% 
+  mutate(itération = "3")
+
+dim(IT3)
+```
+
+<br>
+<br>
+
+#### 2.2. Regroupement des trois itérations en un fichier unique "mooc"
+
+On assemble les trois itérations dans un jeu de données unique appelé "mooc"
+
+```{r}
+mooc <- bind_rows(IT1, IT2, IT3) #on empile à la suite les 3 itérations via la fonction bind_rows
+
+dim(mooc)
+head(mooc,1)
+  
+```
+<br>
+<br>
+
+#### 2.3. Allègement du jeu de données "mooc"
+
+On simplifie le jeu de données mooc en ne conservant des fichiers quest que les variables nécessaires à l'analyse, à savoir : Gender et Country_HDI.
+
+```{r}
+mooc <- mooc %>%
+  select(Student_ID, Gender, Country_HDI, Exam.score:view.forum.fonc.cours) 
+
+dim(mooc)
+head(mooc,1)
+```
+
+
+On examine les données manquantes afin de s'assurer de la qualité du jeu de données. 
+```{r}
+miss_var_summary(mooc)
+```
+
+En examinant les données manquantes, on peut constater que la variable Student_ID en contient 350. Or, comme il s'agit de notre variable de base, les observations qui ne disposent pas de cette donnée ne peuvent pas servir notre analyse. De fait, on peut les supprimer.
+
+```{r}
+mooc <- na.rm(mooc, "Student_ID")
+
+dim(mooc)
+```
+<br>
+<br>
+
+#### 2.4. Création de nouvelles variables
+
+Afin d'analyser les données, on va créer de nouvelles variables :
+ - "nb_video_vu" qui contient le nombre total de vidéos visionnées par chaque apprenant,
+ - "nb_quiz_fait" qui contient le nombre total de quizzs réalisés par chaque apprenant,
+ - "IDH" qui recode la variable "Country_HDI" afin de faire apparaitre les niveaux moyen (M) et haut (H) dans une seule catégorie intermédiaire, codée I,
+ - "Genre" qui recode la variable Gender en "Femme" et "Homme", 
+ - "Type" qui classe chaque apprenant selon 4 catégories en fonction de leurs résultats et du nombre de vidéos visionnées.
+
+
+```{r}
+mooc <- mooc %>%
+  mutate(nb_video_vu = rowSums(mooc[,c("S1.L1", "S1.L2", "S1.L3", "S1.L4", "S1.L5", "S1.L6")]) +
+           rowSums(mooc[,c("S2.L1", "S2.L2", "S2.L3", "S2.L4", "S2.L5", "S2.L6")]) + 
+           rowSums(mooc[,c("S3.L1.1", "S3.L1.2", "S3.L2", "S3.L3", "S3.L4", "S3.L5")]) +
+           rowSums(mooc[,c("S4.L1.1", "S4.L1.2", "S4.L2", "S4.L3", "S4.L4", "S4.L5")]) +
+           rowSums(mooc[,c("S5.L1.1", "S5.L1.2", "S5.L2", "S5.L3", "S5.L4", "S5.L5")])) %>% #création de nb_video_vu par addition de plusieurs rowSums où une rowSums correspond au total de vidéos visionnées pour chaque semaine du mooc 
+  mutate(nb_quiz_fait = rowSums(mooc[,c("Quizz.1.bin", "Quizz.2.bin", "Quizz.3.bin", "Quizz.4.bin", "Quizz.5.bin")])) %>%  #création de nb_quiz_fait par une rowSums appliquée sur la réalisation ou non des quizzs de fin de semaine
+  mutate(IDH = case_when(Country_HDI == "B" ~ "B",
+                             Country_HDI == "TH" ~ "TH",
+                             Country_HDI == "M" | Country_HDI == "H" ~ "I")) %>% # recodage de la variable HDI pour regroupement des niveaux intermédiaires dans la catégorie I
+  mutate(Genre = case_when(Gender == "une femme" ~ "Femme",
+                             Gender == "un homme" ~ "Homme")) %>% #recodage de la variable gender pour supprimer les articles
+  mutate(Genre = fct_relevel(Genre, c("Homme", "Femme"))) %>% 
+  mutate(Type = case_when(
+    Exam.bin == 1 ~ "Completer",
+    Assignment.bin == 1 | nb_quiz_fait > 0 ~ "Disengaging learner",
+    Assignment.bin == 0 & nb_quiz_fait == 0 & nb_video_vu >= 6 ~ "Auditing learner",
+    Assignment.bin == 0 & nb_quiz_fait == 0 & nb_video_vu < 6 ~ "Bystander")) # création de la variable type qui classe les apprenants selon le visionnage des videos et leur réussite au mooc
+ 
+dim(mooc)  
+head(mooc)
+
+```
+
+On examine les données manquantes du jeu suite à la création des nouvelles variables.
+```{r}
+miss_var_summary(mooc)
+```
+
+
+
+
+<br>
+<br>
+<br>
+<br>
+
+
+### 3. Description du jeu de données : création d'une table de la répartition de la typologie des apprenants en fonction des itérations
+
+#### 3.1. Calcul du nombre d'apprenants par itération
+
+```{r}
+Nombre <- mooc %>%
+  na.rm("Type") %>%
+  group_by(itération) %>%
+  count(Type) %>% 
+  summarize(Nombre = sum(n)) %>%
+  pivot_wider(names_from = itération, values_from = Nombre)
+
+Nombre
+```
+<br>
+<br>
+
+#### 3.2. Calcul de la proportion de chaque type d'apprenant par itération
+
+```{r message=FALSE, warning=FALSE}
+Pct <- mooc %>%
+  na.rm("Type") %>%
+  mutate(Type = fct_relevel(Type, c("Completer", "Disengaging learner", "Auditing learner","Bystander" ))) %>%
+  group_by(itération, Type) %>% 
+  count(Type) %>% 
+  summarize(ttl = sum(n)) %>% 
+  mutate(Proportion = round((ttl/sum(ttl)*100), digit = 1)) %>%
+  select(itération, Type, Proportion) %>%
+  ungroup %>%
+  pivot_wider(names_from = itération, values_from = Proportion)
+```
+```{r}
+Pct
+```
+
+<br>
+<br>
+
+#### 3.3. Création d'une table de répartition des apprenants par type
+
+```{r}
+nombre <- c("N = 7965", "N = 3798", "N = 3883")
+completer <- c(0.3, 23.1, 21.7)
+disengaging <- c(58.4, 28.8, 24.5)
+auditing <- c(1.9, 2.8, 2.8)
+bystander <- c(39.4, 45.3, 51)
+Type <-  c("","Completer", "Disengaging", "Auditing", "Bystander")
+
+table_type = matrix(c(nombre, completer, disengaging, auditing, bystander), nrow = 5, ncol = 3, byrow = T)
+colnames(table_type) <- c("Itération n°1", "Itération n°2", "Itération n°3")
+rownames(table_type) <- Type
+
+kable(table_type, align = c("c","c","c"))
+```
+
+
+<br>
+<br>
+<br>
+<br>
+
+### 4. Chi2 et mosaic plot
+
+#### 4.1. Calcul de la répartition des apprenants par genre et IDH
+
+```{r message=FALSE, warning=FALSE}
+chi2 <- mooc %>%
+  na.rm(c("Genre", "IDH")) %>%
+  group_by(Genre, IDH) %>% 
+  count(Genre) %>% 
+  summarize(Nombre = sum(n)) %>% 
+  ungroup %>%
+  pivot_wider(names_from = Genre, values_from = Nombre) #la fonction pivot_wider permet d'obtenir une table plus large que longue où la variable Gender disparait au profit des colonnes "Femme" et "Homme" qui reprennent les valeurs de la variable Nombre
+```
+```{r}
+chi2 
+```
+
+<br>
+<br>
+
+#### 4.2. Réalisation d'une table
+
+```{r}
+base_chi2 = matrix(c(chi2$Homme, chi2$Femme), ncol = 3, byrow = T)
+colnames(base_chi2) <- c("Bas", "Intermédiaire", "Très haut")
+rownames(base_chi2) <- c("Homme", "Femme")
+
+kable(base_chi2, align = c("c","c","c"))
+```
+<br>
+<br>
+
+#### 4.3. Test de chi2
+
+```{r}
+test_chi2 <- chisq.test(base_chi2)
+
+test_chi2
+```
+
+
+<br>
+<br>
+
+#### 4.4. Réalisation d'un mosaic plot
+
+```{r}
+mosaicplot(base_chi2, shade = T, main = "", xlab = "Genre", ylab = "IDH", las = 1)
+
+```
+
+
+<br>
+<br>
+
+#### 4.5. Calcul du V de Cramer
+
+```{r}
+cramerV(base_chi2)
+```
+
+
+<br>
+<br>
+<br>
+<br>
+
+### 5. Modèle linéaire, tests non paramétriques
+
+#### 5.1. Test de Student
+
+Ici, les variances des deux échantillons (Femme et Homme) étant différentes, il convient de tenir compte de cette différence en adaptant le test de Student par un test t de Welch.
+
+```{r}
+student <- mooc %>%
+  na.rm(c("Genre", "nb_video_vu")) 
+
+t.test(nb_video_vu~Genre, data = student)
+
+```
+La p-value est inférieure à 0.05, il y a une corrélation entre le genre et le nombre de vidéos visionnées. 
+
+<br>
+<br>
+
+#### 5.2. Test non paramétrique 
+
+Le test U de Mann-Whitney (aussi appelé test de la somme des rangs de Wilcoxon) est le pendant non paramétique du test t pour des écahntillons indépendants.
+Il sera donc utilisé ici.
+
+```{r}
+wilcox <- mooc %>%
+  na.rm(c("Genre", "nb_video_vu")) 
+
+wilcox_test(nb_video_vu~Genre, data = wilcox)
+```
+ 
+
+<br>
+<br>
+
+#### 5.3. Régression linéaire
+
+On cherche à établir un lien entre le nombre de quizzs réalisés et le nombre de vidéos visionnées.
+
+```{r}
+lm(nb_quiz_fait~nb_video_vu, data = mooc)
+```
+<br>
+
+##### 5.3.1. Test de Pearson
+
+```{r}
+pearson <- cor.test(mooc$nb_quiz_fait, mooc$nb_video_vu, method = "pearson")
+
+pearson
+```
+Il y a une forte corrélation positive entre le nombre de quizz réalisés et le nombre de vidéos visionnées.
+
+<br>
+<br>
+
+##### 5.3.2. Test de Spearman
+
+```{r}
+spearman <- suppressWarnings(cor.test(mooc$nb_quiz_fait, mooc$nb_video_vu, method = "spearman"))
+
+spearman
+```
+La forte corrélation positive entre le nombre de quizz réalisés et le nombre de vidéos visionnées résultant du test de Pearson est confirmée par le test de Spearman.
+
+<br>
+<br>
+
+##### 5.3.3. Représentation graphique
+
+```{r message=FALSE, warning=FALSE}
+ggplot(mooc, aes(nb_video_vu, nb_quiz_fait)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Nombre de vidéos visonnées", 
+        y = "Nombre de quizz réalisés")
+```
+
+
+<br>
+<br>
+
+#### 5.4. ANOVA
+
+On cherche maintenant à l'évaluer l'effet de l'IDH et du genre sur le nombre de vidéos visionnées.
+
+<br>
+
+##### 5.4.1. ANOVA sans intéraction entre les variables IDH et Genre
+
+```{r}
+# Création d'un modèle sans intérection entre HDI et genre 
+mdl_anova <- lm (nb_video_vu ~ Genre + IDH, data = mooc)
+mdl_anova
+```
+
+```{r}
+# création de la table avec la somme des carrés, le F et les degrés de liberté
+round(anova(mdl_anova), digit = 2)
+
+```
+Un F ratio élevé indique que la variance interclasse est plus grande que la variance intraclasse. Cela fait augmenter les chances de rejeter l’hypothèse nulle et de pouvoir affirmer qu’il existe bien une différence entre nos groupes d’intérêt. 
+Ici, à p-value égales, F est beaucoup plus grand pour l'IDH que pour le genre. 
+```{r}
+genre <- c(1, 1873, 1873, 14.38, "< 2.2e-16 ***")
+idh <- c(2, 74156, 37078, 284.66, "< 2.2e-16 ***")
+residu <- c(8947, 1165380, 130.25, "","")
+
+table_anv = matrix(c(genre, idh, residu), nrow = 3, ncol = 5, byrow = T)
+rownames(table_anv) <- c("Genre", "IDH", "Residuals")
+colnames(table_anv) <- c("Df", "Sum Sq", "Mean Sq","F", "p-value")
+
+kable(table_anv, align = c("c", "c", "c", "c", "c"))
+```
+
+
+
+```{r}
+# création de la table de statistiques inférentielles
+summary(mdl_anova)
+```
+```{r}
+itpt <- c(6.43, 0.36, 17.99, "< 2e-16 ***")
+femme <- c(0.17, 0.26, 0.66, 0.51)
+idhi <- c(4.25, 0.57, 7.45, "1.03e-13 ***")
+idhth <- c(8.71, 0.38, 22.69, "< 2e-16 ***")
+
+table_anv_sum = matrix(c(itpt, femme, idhi, idhth), nrow = 4, ncol = 4, byrow = T)
+rownames(table_anv_sum) <- c("Intercept", "Femme", "IDH Intermédiaire", "IDH Très élevé")
+colnames(table_anv_sum) <- c("Estimate", "Std. Error","t-value", "p-value")
+
+kable(table_anv_sum, align = c("c", "c", "c", "c"))
+```
+
+<br>
+<br>
+
+##### 5.4.2. ANOVA avec intéraction entre les variables HDI et gender
+
+```{r}
+# Création d'un modèle avec intérection entre HDI et genre 
+mdl_anova_inter <- lm (nb_video_vu ~ Genre + IDH + Genre * IDH, data = mooc)
+mdl_anova_inter
+```
+
+```{r}
+# création de la table avec la somme des carrés, le F et les degrés de liberté
+round(anova(mdl_anova_inter), digit = 2)
+
+```
+
+```{r}
+genre <- c(1, 1873, 1873, 14.38, "< 2e-16 ***")
+idh <- c(2, 74156, 37078, 284.69, "< 2e-16 ***")
+genre_idh <- c(2, 390, 195, 1.50, 0.22)
+residu <- c(8945, 1164990, 130, "","")
+
+table_anv_inter = matrix(c(genre, idh, genre_idh, residu), nrow = 4, ncol = 5, byrow = T)
+rownames(table_anv_inter) <- c("Genre", "IDH", "Genre:IDH", "Residuals")
+colnames(table_anv_inter) <- c("Df", "Sum Sq", "Mean Sq","F", "p-value")
+
+kable(table_anv_inter, align = c("c", "c", "c", "c", "c"))
+```
+
+```{r}
+# création de la table de statistiques inférentielles
+summary(mdl_anova_inter)
+```
+
+```{r}
+itpt_i <- c(6.37, 0.38, 16.60, "< 2e-16 ***")
+femme_i <- c(0.59, 1.02, 0.58, 0.56)
+idhi_i <- c(4.84, 0.67, 7.22, "5.54e-13 ***")
+idhth_i <- c(8.73, 0.42, 20.86, "< 2e-16 ***")
+fem_idhi_i <- c("-1.93", 1.38, "-1.40", 0.16)
+fem_idhth_i <- c("-0.31", 1.05, "-0.29", 0.77)
+
+table_anv_inter_sum = matrix(c(itpt_i, femme_i, idhi_i, idhth_i, fem_idhi_i, fem_idhth_i),
+                             nrow = 6, ncol = 4, byrow = T)
+rownames(table_anv_inter_sum) <- c("Intercept", "Femme", "IDH Intermédiaire", "IDH Très élevé", "Femme : IDH Intermédiaire", "Femme : IDH Très élevé")
+colnames(table_anv_inter_sum) <- c("Estimate", "Std. Error","t-value", "p-value")
+
+kable(table_anv_inter_sum, align = c("c", "c", "c", "c"))
+```
+
+
+
+
+<br>
+<br>
+<br>
+<br>
+
+### 6. Régression logistique
+
+#### 6.1. Présentation des odd ratios
+
+On s'intéresse ici à l'effet de genre et du niveau de HDi sur la réalisation de l'examen final.
+
+##### 6.1.1. Réalisation d'une table d'odd ratios
+
+```{r}
+# Création d'un modèle sans intérection entre HDI et genre 
+mdl_exam <- glm(Exam.bin ~ Genre + IDH, data = mooc, family = binomial)
+mdl_exam
+```
+
+```{r message=FALSE, warning=FALSE}
+odds.ratio(mdl_exam)
+```
+
+```{r}
+homme_or <- c("Réf.", "", "", "")
+femme_or  <- c(1.12, 1.00, 1.26, "0.05 *")
+idhb_or <- c("Réf.", "", "", "")
+idhi_or <- c(1.12, 0.85, 1.47, 0.42)
+idhth_or <- c(1.37, 1.14, 1.66, "0.00 ***")
+
+table_or = matrix(c(homme_or, femme_or, idhb_or, idhi_or, idhth_or),
+                             nrow = 5, ncol = 4, byrow = T)
+rownames(table_or) <- c("Homme", "Femme", "IDH Bas", "IDH Intermédiaire", "IDH Très élevé")
+colnames(table_or) <- c("Odd Ratios", "2.5 %","97.5 %", "p-value")
+
+kable(table_or, align = c("c", "c", "c", "c"))
+```
+
+
+<br>
+<br>
+
+##### 6.1.2. Réalisation d'un forest plot
+
+```{r}
+forest_model(mdl_exam)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+or_plot(mooc, "Exam.bin", c("Genre", "IDH"))
+```
+
+<br>
+<br>
+
+#### 6.2. Données de comptage et loi de Poisson
+
+On revient ici sur la variable Nb_video_vu
+
+##### 6.2.1. Représentation de la distribution de la variable
+
+```{r message=FALSE, warning=FALSE}
+ggplot(mooc, aes(nb_video_vu)) +
+  geom_histogram() +
+  labs(x = "Nombre de vidéos visonnées", y = "Fréquence") +
+  stat_bin(bins = 10, color = "blue", fill = "skyblue")
+```
+
+
+##### 6.2.2. Test de la normalité de la variable
+
+
+```{r}
+par(mfrow=c(2,2));plot(mdl_anova_inter)
+```
+
+
+
+
+##### 6.2.2. Modéliser une loi de poisson
+
+```{r}
+# Création d'un modèle sans intéraction entre HDI et genre avec loi de poisson
+mdl_poisson <- glm(nb_video_vu ~ Genre + IDH + Genre * IDH, data = mooc, family = "poisson")
+mdl_poisson
+```
+
+```{r}
+summary(mdl_poisson)
+```
+
+```{r}
+itpt_p <- c(1.85, 0.01, 138.97, "< 2e-16 ***")
+femme_p <- c(0.09, 0.03, 2.59, "0.00971 **")
+idhi_p <- c(0.56, 0.02, 28.82, "< 2e-16 ***")
+idhth_p <- c(0.86, 0.02, 62.31, "< 2e-16 ***")
+fem_idhi_p <- c("-0.26", 0.04, "-5.09", "3.56e-07 ***")
+fem_idhth_p <- c("-0.07", 0.03, "-2.01", "0.04432 *" )
+
+table_poisson = matrix(c(itpt_p, femme_p, idhi_p, idhth_p, fem_idhi_p, fem_idhth_p),
+                             nrow = 6, ncol = 4, byrow = T)
+rownames(table_poisson) <- c("Intercept", "Femme", "IDH Intermédiaire", "IDH Très élevé", "Femme : IDH Intermédiaire", "Femme : IDH Très élevé")
+colnames(table_poisson) <- c("Estimate", "Std. Error","t-value", "p-value")
+
+kable(table_poisson, align = c("c", "c", "c", "c"))
+```
